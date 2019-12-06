@@ -11,12 +11,19 @@ lib
 * mkl
 
 ## Benchmark
+*Testing on mnist with only one fully connected layer*
+
+original accuracy: 92%
+
+pytorch int8 accuracy: 92.6%
+
+my engine accuracy: 91.3%
 
 |Batch size|Pytorch FP32|Pytorch INT8|Gains|My Engine INT8|Gains|
 |---|---|---|---|---|---|
-|1|
-|100|
-|10000|
+|1|561ms|576ms|0.97|617ms|0.91|
+|100|9.3ms|12.6ms|0.74|16.1ms|0.58|
+|10000|2.3ms|3.8ms|0.71|5.7ms|0.47|
 
 
 ## Current Progress
