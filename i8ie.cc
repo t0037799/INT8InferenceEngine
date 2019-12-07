@@ -43,14 +43,16 @@ void dequantize(float* M, int* Q, int m, int n, float sa, float sb) {
   }
 }
 
-py::array_t<float> qfc(py::buffer weight, py::buffer bias, py::buffer in) {
-  py::buffer_info w_info = weight.request();
-  py::buffer_info b_info = bias.request();
-  py::buffer_info i_info = in.request();
-  int m = i_info.shape[0];
-  int n = w_info.shape[0];
-  int o = w_info.shape[1];
-  std::shared_ptr<float> C2(new float[m * n]());
+py::array_t<float> qfc(py::array_t<float> weight, py::array_t<float> bias,
+                       py::array_t<float> in) {
+  auto w = weight.unchecked<2>();
+  auto i = in.unchecked<2>();
+  auto b = bias.unchecked<1>();
+  int m = i.shape(0);
+  int n = w.shape(0);
+  int o = w.shape(1);
+  py::array_t<float> res({m, n});
+  float* C2 = static_cast<float*>(res.request().ptr);
   u8_t* A = new u8_t[m * o];
   s8_t* B = new s8_t[o * n];
   int* C = new int[m * n];
@@ -61,47 +63,26 @@ py::array_t<float> qfc(py::buffer weight, py::buffer bias, py::buffer in) {
   for (int i = 0; i < n; ++i) {  // calculate offset after mul
     float t = 0;
     for (int j = 0; j < o; ++j) {
-      t += zp * ((float*)(w_info.ptr))[i * o + j] / sb;
+      t += zp * w(i, j) / sb;
     }
     oc[i] = -t;
   }
 
-  quantize((float*)i_info.ptr, A, m, o, sa, zp);
-  quantize((float*)w_info.ptr, B, n, o, sb);
+  quantize(i.data(0, 0), A, m, o, sa, zp);
+  quantize(w.data(0, 0), B, n, o, sb);
   cblas_gemm_s8u8s32(CblasRowMajor, CblasNoTrans, CblasTrans, CblasRowOffset, m,
                      n, o, 1, A, o, 0, B, o, 0, 0, C, n, oc);
-  dequantize(C2.get(), C, m, n, sa, sb);
+  dequantize(C2, C, m, n, sa, sb);
   for (int i = 0; i < m; ++i) {  // add bias
     for (int j = 0; j < n; ++j) {
-      C2.get()[i * n + j] += ((float*)b_info.ptr)[j];
+      C2[i * n + j] += b[j];
     }
   }
-  return py::array_t<float>(py::buffer_info(
-      C2.get(), sizeof(float), py::format_descriptor<float>::format(), 2,
-      {m, n}, {sizeof(float) * n, sizeof(float)}));
+  delete[] A;
+  delete[] B;
+  delete[] C;
+  delete[] oc;
+  return res;
 }
 
-py::array_t<float> fc(py::buffer weight, py::buffer bias, py::buffer in) {
-  py::buffer_info w_info = weight.request();
-  py::buffer_info b_info = bias.request();
-  py::buffer_info i_info = in.request();
-  int m = i_info.shape[0];
-  int n = w_info.shape[0];
-  int o = w_info.shape[1];
-  std::shared_ptr<float> C2(new float[m * n]);
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, n, o, 1,
-              (float*)i_info.ptr, o, (float*)w_info.ptr, o, 0, C2.get(), n);
-  for (int i = 0; i < m; ++i) {
-    for (int j = 0; j < n; ++j) {
-      C2.get()[i * n + j] += ((float*)b_info.ptr)[j];
-    }
-  }
-  return py::array_t<float>(py::buffer_info(
-      C2.get(), sizeof(float), py::format_descriptor<float>::format(), 2,
-      {m, n}, {sizeof(float) * n, sizeof(float)}));
-}
-
-PYBIND11_MODULE(i8ie, m) {
-  m.def("fc", fc);
-  m.def("qfc", qfc);
-}
+PYBIND11_MODULE(i8ie, m) { m.def("qfc", qfc); }
