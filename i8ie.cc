@@ -11,7 +11,7 @@ namespace py = pybind11;
 using u8_t = unsigned char;
 using s8_t = char;
 
-void quantize(float* M, u8_t* Q, int m, int n, float scale,
+void quantize(const float* M, u8_t* Q, int m, int n, float scale,
               u8_t zp) {  // asymmetric quantization
   for (int i = 0; i < m; ++i) {
     for (int j = 0; j < n; ++j) {
@@ -23,7 +23,7 @@ void quantize(float* M, u8_t* Q, int m, int n, float scale,
   }
 }
 
-void quantize(float* M, s8_t* Q, int m, int n,
+void quantize(const float* M, s8_t* Q, int m, int n,
               float scale) {  // symmetric  quantization
   for (int i = 0; i < m; ++i) {
     for (int j = 0; j < n; ++j) {
