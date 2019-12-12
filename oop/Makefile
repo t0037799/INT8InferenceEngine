@@ -1,5 +1,5 @@
 CXXFLAGS = -march=native -O3 -DMKL_ILP64 -m64
-CXXFLAGS += -fvisibility=hidden
+CXXFLAGS += -fvisibility=hidden -fopenmp -std=c++17
 ifeq ($(shell uname -r), 5.3.6-arch1-1-ARCH)
 MKLROOT = /opt/intel/compilers_and_libraries_2019.5.281/linux/mkl
 MKLINC = ${MKLROOT}/include

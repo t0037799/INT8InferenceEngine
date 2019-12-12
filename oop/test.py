@@ -8,25 +8,61 @@ import time
 import numpy as np
 import tensor_core
 
-
 class Net(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc = nn.Linear(784, 10)
+        self.conv1 = nn.Conv2d(1, 20, kernel_size=5)
+        self.conv2 = nn.Conv2d(20, 50, kernel_size=5)
+        self.fc1 = nn.Linear(800, 500)
+        self.fc2 = nn.Linear(500, 10)
+
     def forward(self, x):
-        x = x.reshape(-1, 784)
-        x = self.fc(x)
+        x = self.conv1(x)
+        x = F.max_pool2d(x, kernel_size=2, stride=2)
+        x = self.conv2(x)
+        x = F.max_pool2d(x, kernel_size=2, stride=2)
+        x = x.view(-1, 800)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
+class MyNet(nn.Module):
+    def __init__(self):
+        self.conv1 = tensor_core.Conv2d(1, 20, 5)
+        self.conv2 = tensor_core.Conv2d(20, 50, 5)
+        self.fc1 = tensor_core.Linear(800, 500)
+        self.fc2 = tensor_core.Linear(500, 10)
+
+    def load(self, state_dict):
+        for key in state_dict:
+            name, attr = key.split('.')
+            if attr == 'weight':
+                self.__dict__[name].load_weight(state_dict[key])
+            elif attr == 'bias':
+                self.__dict__[name].load_bias(state_dict[key])
+
+    def __call__(self, x):
+        maxpool2d = tensor_core.Maxpool2d(2,2)
+        relu = tensor_core.Relu()
+        x = tensor_core.create(x)
+        x = maxpool2d(self.conv1(x))
+        x = maxpool2d(self.conv2(x))
+        x = x.reshape([-1,800])
+        x = relu(self.fc1(x))
+        x = self.fc2(x).numpy()
+        return x
+
 #torch.set_num_threads(1)
+state_dict = torch.load('conv28.pt')
+torch_model = Net()
+torch_model.load_state_dict(state_dict)
+my_model = MyNet()
+my_model.load(state_dict)
 
-model = Net()
-model.load_state_dict(torch.load('../model28.pt'))
-
-batch_size = 100
+batch_size = 1000
 transform = transforms.Compose(
     [transforms.ToTensor()])
-test_dataset = torchvision.datasets.MNIST(root='../data/mnist/', train=False,
+test_dataset = torchvision.datasets.MNIST(root='./data/mnist/', train=False,
                                        download=True, transform=transform)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size,
                                          shuffle=False)
@@ -37,32 +73,21 @@ for batch_idx, (x, target) in enumerate(test_loader):
     xs.append(x)
     ts.append(target)
 
+t = time.time()
 correct_cnt = 0
-tt = 0
 for x,target in zip(xs,ts):
-    t = time.time()
-    x = model(x).data.numpy()
-    x[0] = x[0]
-    tt += time.time() - t
-    p = np.argmax(x, axis = 1)
-    correct_cnt += (p  == target.numpy()).sum()
-print(tt,'sec')
-print(correct_cnt)
-
-
-w = model.state_dict()['fc.weight'].numpy()
-b = model.state_dict()['fc.bias'].numpy()
-fc = tensor_core.Linear(w,b)
-correct_cnt = 0
-tt = 0
-for x,target in zip(xs,ts):
-    x = x.reshape(-1,784).numpy()
-    x = tensor_core.create(x)
-    t = time.time()
-    x = fc(x).numpy()
-    tt += time.time() - t
+    x = my_model(x)
     p = np.argmax(x, axis = 1)
     correct_cnt += (p == target.numpy()).sum()
 
+print(time.time() - t,'sec')
 print(correct_cnt)
-print(tt,'sec')
+
+t = time.time()
+correct_cnt = 0
+for x,target in zip(xs,ts):
+    out = torch_model(x)
+    _, pred_label = torch.max(out.data, 1)
+    correct_cnt += (pred_label == target.data).sum()
+print(time.time() - t,'sec')
+print(correct_cnt)
