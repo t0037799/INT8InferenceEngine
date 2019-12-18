@@ -69,47 +69,46 @@ class Linear : ILayer {
   std::tuple<float, float> range;
 };
 
-template<typename T>
-Tensor<T>& relu(Tensor<T>&& in){
-    Tensor<T>* out = new Tensor<T>(in.shape());
-    for (ssize_t i = 0; i < in.size(); ++i) {
-      out->data()[i] = (in.data()[i] > 0) ? in.data()[i] : 0;
-    }
-    return *out;
+template <typename T>
+Tensor<T>& relu(Tensor<T>&& in) {
+  Tensor<T>* out = new Tensor<T>(in.shape());
+  for (ssize_t i = 0; i < in.size(); ++i) {
+    out->data()[i] = (in.data()[i] > 0) ? in.data()[i] : 0;
+  }
+  return *out;
 }
 
-template<typename T>
-T min(){
-	return -std::numeric_limits<T>::max();
+template <typename T>
+T min() {
+  return -std::numeric_limits<T>::max();
 }
-template<>
-u8_t min<u8_t>(){
-	return 0;
+template <>
+u8_t min<u8_t>() {
+  return 0;
 }
-template<typename T>
-  Tensor<T>& maxpool2d(Tensor<T>&& in, ssize_t kernel_size, ssize_t strides) {
-    auto shape = in.shape();
-    auto [n, c, h, w] = std::make_tuple(shape[0], shape[1], shape[2], shape[3]);
-    Tensor<T>* out =
-        new Tensor<T>({n, c, (h - kernel_size) / strides + 1,
-                           (w - kernel_size) / strides + 1});
+template <typename T>
+Tensor<T>& maxpool2d(Tensor<T>&& in, ssize_t kernel_size, ssize_t strides) {
+  auto shape = in.shape();
+  auto [n, c, h, w] = std::make_tuple(shape[0], shape[1], shape[2], shape[3]);
+  Tensor<T>* out = new Tensor<T>(
+      {n, c, (h - kernel_size) / strides + 1, (w - kernel_size) / strides + 1});
 #pragma omp parallel for
-    for (int i = 0; i < n; ++i) {
-      for (int j = 0; j < c; ++j) {
-        for (int k = 0, o = 0; k < h; k += strides, ++o) {
-          for (int l = 0, p = 0; l < w; l += strides, ++p) {
-            T r = min<T>();
-            for (int m = 0; m < kernel_size; ++m) {
-              for (int n = 0; n < kernel_size; ++n) {
-                r = [](T a, T b) { return (a >= b) ? a : b; }(
-                        r, in(i, j, k + m, l + n));
-                // r = std::max(r, in(i, j, k + m, l + n)); it's slower
-              }
+  for (int i = 0; i < n; ++i) {
+    for (int j = 0; j < c; ++j) {
+      for (int k = 0, o = 0; k < h; k += strides, ++o) {
+        for (int l = 0, p = 0; l < w; l += strides, ++p) {
+          T r = min<T>();
+          for (int m = 0; m < kernel_size; ++m) {
+            for (int n = 0; n < kernel_size; ++n) {
+              r = [](T a, T b) { return (a >= b) ? a : b; }(
+                      r, in(i, j, k + m, l + n));
+              // r = std::max(r, in(i, j, k + m, l + n)); it's slower
             }
-            (*out)(i, j, o, p) = r;
           }
+          (*out)(i, j, o, p) = r;
         }
       }
     }
-    return *out;
   }
+  return *out;
+}
