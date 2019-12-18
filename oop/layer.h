@@ -3,6 +3,7 @@
 #include <iostream>
 #include <tuple>
 
+#include "calibrator.h"
 #include "mkl.h"
 #include "pybind11/numpy.h"
 #include "tensor.h"
@@ -29,55 +30,78 @@ class Linear : ILayer {
     ssize_t m = in.shape()[0];
     ssize_t n = weight.shape()[0];
     ssize_t k = weight.shape()[1];
-    Tensor<float>* out = new Tensor<float>({m, n});
+    Tensor<float>* outp = new Tensor<float>({m, n});
+    Tensor<float>& out = *outp;
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, m, n, k, 1, in.data(),
-                k, weight.data(), k, 0, out->data(), n);
+                k, weight.data(), k, 0, out.data(), n);
     for (ssize_t i = 0; i < m; ++i) {
       for (ssize_t j = 0; j < n; ++j) {
-        out->data()[i * n + j] += bias.data()[j];
+        out(i, j) += bias.data()[j];
       }
     }
-    return *out;
+    if (is_preparing) {
+      cal->sample(out.data(), out.size());
+    }
+    return out;
   }
 
   void load_weight(py::array_t<float> w) { weight.load_numpy(w); }
   void load_bias(py::array_t<float> b) { bias.load_numpy(b); }
+  void prepare() {
+    cal = new Calibrator();
+    is_preparing = true;
+  }
+  void convert() {
+    range = cal->get_minmax(0.975);
+    delete cal;
+    is_preparing = false;
+    quantize();
+    is_quantized = true;
+  }
+
+  void quantize() {}
 
   Tensor<float> weight;
   Tensor<float> bias;
+  Calibrator* cal;
+  bool is_preparing = false;
+  bool is_quantized = false;
+  std::tuple<float, float> range;
 };
 
-class Relu : ILayer {
- public:
-  Tensor<float>& forward_prop(Tensor<float>&& in) {
-    Tensor<float>* out = new Tensor<float>(in.shape());
+template<typename T>
+Tensor<T>& relu(Tensor<T>&& in){
+    Tensor<T>* out = new Tensor<T>(in.shape());
     for (ssize_t i = 0; i < in.size(); ++i) {
       out->data()[i] = (in.data()[i] > 0) ? in.data()[i] : 0;
     }
     return *out;
-  }
-};
+}
 
-class Maxpool2d : ILayer {
- public:
-  Maxpool2d() = delete;
-  Maxpool2d(ssize_t kernel_size, ssize_t strides)
-      : kernel_size(kernel_size), strides(strides) {}
-  Tensor<float>& forward_prop(Tensor<float>&& in) {
+template<typename T>
+T min(){
+	return -std::numeric_limits<T>::max();
+}
+template<>
+u8_t min<u8_t>(){
+	return 0;
+}
+template<typename T>
+  Tensor<T>& maxpool2d(Tensor<T>&& in, ssize_t kernel_size, ssize_t strides) {
     auto shape = in.shape();
     auto [n, c, h, w] = std::make_tuple(shape[0], shape[1], shape[2], shape[3]);
-    Tensor<float>* out =
-        new Tensor<float>({n, c, (h - kernel_size) / strides + 1,
+    Tensor<T>* out =
+        new Tensor<T>({n, c, (h - kernel_size) / strides + 1,
                            (w - kernel_size) / strides + 1});
 #pragma omp parallel for
     for (int i = 0; i < n; ++i) {
       for (int j = 0; j < c; ++j) {
         for (int k = 0, o = 0; k < h; k += strides, ++o) {
           for (int l = 0, p = 0; l < w; l += strides, ++p) {
-            float r = -std::numeric_limits<float>::max();
+            T r = min<T>();
             for (int m = 0; m < kernel_size; ++m) {
               for (int n = 0; n < kernel_size; ++n) {
-                r = [](float a, float b) { return (a >= b) ? a : b; }(
+                r = [](T a, T b) { return (a >= b) ? a : b; }(
                         r, in(i, j, k + m, l + n));
                 // r = std::max(r, in(i, j, k + m, l + n)); it's slower
               }
@@ -89,7 +113,3 @@ class Maxpool2d : ILayer {
     }
     return *out;
   }
-
-  ssize_t kernel_size;
-  ssize_t strides;
-};

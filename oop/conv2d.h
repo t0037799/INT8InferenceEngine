@@ -62,13 +62,30 @@ class Conv2d : ILayer {
       }
     }
     delete[] matricize;
+    if (is_preparing) {
+      cal->sample(out.data(), out.size());
+    }
 
     return out;
   }
 
   void load_weight(py::array_t<float> w) { weight.load_numpy(w); }
   void load_bias(py::array_t<float> b) { bias.load_numpy(b); }
+  void prepare() {
+    cal = new Calibrator();
+    is_preparing = true;
+  }
+  void convert() {
+    range = cal->get_minmax(0.975);
+    delete cal;
+    is_preparing = false;
+    is_quantized = true;
+  }
 
   Tensor<float> weight;
   Tensor<float> bias;
+  Calibrator* cal;
+  bool is_preparing = false;
+  bool is_quantized = false;
+  std::tuple<float, float> range;
 };

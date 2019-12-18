@@ -26,6 +26,12 @@ void declare_tensor(py::module& mod) {
 
 PYBIND11_MODULE(tensor_core, mod) {
   mod.def("create", create_tensor);
+  mod.def("maxpool2d", [](Tensor<float>& in, ssize_t kernel_size, ssize_t strides) -> Tensor<float>&&{
+		  return std::move(maxpool2d(std::move(in), kernel_size, strides));
+		  });
+  mod.def("relu", [](Tensor<float>& in) -> Tensor<float>&&{
+		  return std::move(relu(std::move(in)));
+		  });
   declare_tensor<float>(mod);
   declare_tensor<int>(mod);
   py::class_<Linear>(mod, "Linear")
@@ -35,6 +41,10 @@ PYBIND11_MODULE(tensor_core, mod) {
            [](Linear& layer, py::array_t<float> w) { layer.load_weight(w); })
       .def("load_bias",
            [](Linear& layer, py::array_t<float> b) { layer.load_bias(b); })
+      .def("prepare",
+           [](Linear& layer) { layer.prepare(); })
+      .def("convert",
+           [](Linear& layer) { layer.convert(); })
       .def("__call__", [](Linear& layer, Tensor<float>& x) -> Tensor<float>&& {
         return std::move(layer.forward_prop(std::move(x)));
       });
@@ -45,18 +55,11 @@ PYBIND11_MODULE(tensor_core, mod) {
            [](Conv2d& layer, py::array_t<float> w) { layer.load_weight(w); })
       .def("load_bias",
            [](Conv2d& layer, py::array_t<float> b) { layer.load_bias(b); })
+      .def("prepare",
+           [](Conv2d& layer) { layer.prepare(); })
+      .def("convert",
+           [](Conv2d& layer) { layer.convert(); })
       .def("__call__", [](Conv2d& layer, Tensor<float>& x) -> Tensor<float>&& {
-        return std::move(layer.forward_prop(std::move(x)));
-      });
-  py::class_<Maxpool2d>(mod, "Maxpool2d")
-      .def(py::init<ssize_t, ssize_t>())
-      .def("__call__",
-           [](Maxpool2d& layer, Tensor<float>& x) -> Tensor<float>&& {
-             return std::move(layer.forward_prop(std::move(x)));
-           });
-  py::class_<Relu>(mod, "Relu")
-      .def(py::init<>())
-      .def("__call__", [](Relu& layer, Tensor<float>& x) -> Tensor<float>&& {
         return std::move(layer.forward_prop(std::move(x)));
       });
 }

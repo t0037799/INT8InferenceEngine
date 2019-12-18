@@ -42,13 +42,11 @@ class MyNet(nn.Module):
                 self.__dict__[name].load_bias(state_dict[key])
 
     def __call__(self, x):
-        maxpool2d = tensor_core.Maxpool2d(2,2)
-        relu = tensor_core.Relu()
         x = tensor_core.create(x)
-        x = maxpool2d(self.conv1(x))
-        x = maxpool2d(self.conv2(x))
+        x = tensor_core.maxpool2d(self.conv1(x), 2, 2)
+        x = tensor_core.maxpool2d(self.conv2(x), 2, 2)
         x = x.reshape([-1,800])
-        x = relu(self.fc1(x))
+        x = tensor_core.relu(self.fc1(x))
         x = self.fc2(x).numpy()
         return x
 

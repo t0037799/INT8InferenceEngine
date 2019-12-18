@@ -34,6 +34,7 @@ class Tensor {
     data_ = new T[t.size_];
     memcpy(data_, t.data_, t.size_ * sizeof(T));
     cap_ = py::capsule(data_, [](void* f) { delete[] static_cast<T*>(f); });
+    std::cerr << this->size_ << " " << t.ndim_ << "\n";
   }
   Tensor(Tensor<T>&& t) {
     // std::cout << "move ctor\n";
@@ -81,7 +82,7 @@ class Tensor {
     shape_ = std::vector<ssize_t>{size};
     size_ = size;
     ndim_ = 1;
-    data_ = new float[size_];
+    data_ = new T[size_];
     cap_ = py::capsule(data_, [](void* f) {
       // std::cerr << "sz init release data_\n";
       delete[] static_cast<T*>(f);
@@ -101,7 +102,7 @@ class Tensor {
     for_each(shape_.begin(), shape_.end(),
              [this](ssize_t n) { this->size_ *= n; });
     ndim_ = shape_.size();
-    data_ = new float[size_];
+    data_ = new T[size_];
     // std::cerr << data_ << "addr\n";
     cap_ = py::capsule(data_, [](void* f) {
       // std::cerr << f << " release addr\n";
@@ -119,20 +120,20 @@ class Tensor {
       std::cout << "\n";
       */
   }
-  float& operator()(ssize_t m, ssize_t n) {
+  T& operator()(ssize_t m, ssize_t n) {
     auto [i, j] = std::make_tuple(shape_[0], shape_[1]);
     return *(data_ + m * j + n);
   }
-  const float& operator()(ssize_t m, ssize_t n) const {
+  const T& operator()(ssize_t m, ssize_t n) const {
     auto [i, j] = std::make_tuple(shape_[0], shape_[1]);
     return *(data_ + m * j + n);
   }
-  float& operator()(ssize_t m, ssize_t n, ssize_t o, ssize_t p) {
+  T& operator()(ssize_t m, ssize_t n, ssize_t o, ssize_t p) {
     auto [h, i, j, k] =
         std::make_tuple(shape_[0], shape_[1], shape_[2], shape_[3]);
     return *(data_ + m * i * j * k + n * j * k + o * k + p);
   }
-  const float& operator()(ssize_t m, ssize_t n, ssize_t o, ssize_t p) const {
+  const T& operator()(ssize_t m, ssize_t n, ssize_t o, ssize_t p) const {
     auto [h, i, j, k] =
         std::make_tuple(shape_[0], shape_[1], shape_[2], shape_[3]);
     return *(data_ + m * i * j * k + n * j * k + o * k + p);
@@ -183,7 +184,7 @@ class Tensor {
   std::vector<ssize_t> shape_;
   dtype_t dtype_;
   // quantization
-  bool is_quantized_;
+  bool is_quantized_ = false;
   qtype_t quantize_type_;
   float scale_;
   u8_t zero_point_;
