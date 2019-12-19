@@ -6,6 +6,7 @@
 #include "calibrator.h"
 #include "mkl.h"
 #include "pybind11/numpy.h"
+#include "quant_utils.h"
 #include "tensor.h"
 
 class ILayer {
@@ -19,7 +20,9 @@ class Linear : ILayer {
   Linear() = delete;
   Linear(ssize_t in_channel, ssize_t out_channel)
       : weight(Tensor<float>({out_channel, in_channel})),
-        bias(Tensor<float>(out_channel)) {}
+        bias(Tensor<float>(out_channel)),
+        q_weight(Tensor<s8_t>({out_channel, in_channel})),
+        q_bias(Tensor<s8_t>(out_channel)) {}
   Linear(Tensor<float> _w, Tensor<float> _b) : weight(_w), bias(_b) {}
   Linear(py::array_t<float> _w, py::array_t<float> _b)
       : weight(Tensor<float>(_w)), bias(Tensor<float>(_b)) {}
@@ -45,6 +48,38 @@ class Linear : ILayer {
     return out;
   }
 
+  Tensor<u8_t>& forward_prop(Tensor<u8_t>&& in) {
+    ssize_t m = in.shape()[0];
+    ssize_t n = q_weight.shape()[0];
+    ssize_t k = q_weight.shape()[1];
+    Tensor<u8_t>* outp = new Tensor<u8_t>({m, n});
+    Tensor<u8_t>& out = *outp;
+    out.scale() = scale;
+    out.zero_point() = zero_point;
+    int* C = new int[m * n];
+    int* oc = new int[n];
+    for (int i = 0; i < n; ++i) {  // calculate offset after mul
+      float t = 0;
+      for (int j = 0; j < k; ++j) {
+        t += in.zero_point() * q_weight(i, j) / q_weight.scale();
+      }
+      oc[i] = -t;
+    }
+    cblas_gemm_s8u8s32(CblasRowMajor, CblasNoTrans, CblasTrans, CblasRowOffset,
+                       m, n, k, 1, in.data(), k, 0, q_weight.data(), k, 0, 0, C,
+                       n, oc);
+    for (ssize_t i = 0; i < m; ++i) {
+      for (ssize_t j = 0; j < n; ++j) {
+        C[i * n + j] += q_bias.data()[j] / q_bias.scale();
+      }
+    }
+    down_scale(out.data(), C, out.size(), in.scale(), q_weight.scale(), scale,
+               zero_point);
+    delete[] C;
+    delete[] oc;
+    return out;
+  }
+
   void load_weight(py::array_t<float> w) { weight.load_numpy(w); }
   void load_bias(py::array_t<float> b) { bias.load_numpy(b); }
   void prepare() {
@@ -52,21 +87,43 @@ class Linear : ILayer {
     is_preparing = true;
   }
   void convert() {
-    range = cal->get_minmax(0.975);
+    std::tie(scale, zero_point) = cal->get_range(0.975);
     delete cal;
     is_preparing = false;
     quantize();
     is_quantized = true;
   }
 
-  void quantize() {}
+  void quantize() {
+    float max = -std::numeric_limits<float>::max();
+    float min = std::numeric_limits<float>::max();
+    for (ssize_t i = 0; i < weight.size(); ++i) {
+      min = std::min(min, weight.data()[i]);
+      max = std::max(max, weight.data()[i]);
+    }
+    for (ssize_t i = 0; i < bias.size(); ++i) {
+      min = std::min(min, bias.data()[i]);
+      max = std::max(max, bias.data()[i]);
+    }
+    q_weight.scale() = (max - min) / 127;
+    q_bias.scale() = (max - min) / 127;
+    for (ssize_t i = 0; i < weight.size(); ++i) {
+      q_weight.data()[i] = weight.data()[i] / q_weight.scale();
+    }
+    for (ssize_t i = 0; i < bias.size(); ++i) {
+      q_bias.data()[i] = bias.data()[i] / q_bias.scale();
+    }
+  }
 
   Tensor<float> weight;
   Tensor<float> bias;
+  Tensor<s8_t> q_weight;
+  Tensor<s8_t> q_bias;
   Calibrator* cal;
   bool is_preparing = false;
   bool is_quantized = false;
-  std::tuple<float, float> range;
+  float scale;
+  u8_t zero_point;
 };
 
 template <typename T>
@@ -74,6 +131,16 @@ Tensor<T>& relu(Tensor<T>&& in) {
   Tensor<T>* out = new Tensor<T>(in.shape());
   for (ssize_t i = 0; i < in.size(); ++i) {
     out->data()[i] = (in.data()[i] > 0) ? in.data()[i] : 0;
+  }
+  return *out;
+}
+
+template <>
+Tensor<u8_t>& relu<u8_t>(Tensor<u8_t>&& in) {
+  Tensor<u8_t>* out = new Tensor<u8_t>(in.shape());
+  for (ssize_t i = 0; i < in.size(); ++i) {
+    out->data()[i] =
+        (in.data()[i] > in.zero_point()) ? in.data()[i] : in.zero_point();
   }
   return *out;
 }

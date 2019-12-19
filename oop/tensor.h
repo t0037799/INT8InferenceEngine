@@ -8,6 +8,8 @@
 
 #include "pybind11/numpy.h"
 #include "pybind11/pybind11.h"
+//#include "quant_utils.h"
+#include "test_utils.h"
 
 namespace py = pybind11;
 
@@ -37,18 +39,12 @@ class Tensor {
     std::cerr << this->size_ << " " << t.ndim_ << "\n";
   }
   Tensor(Tensor<T>&& t) {
-    // std::cout << "move ctor\n";
-    /*
-      std::cout << "move ctor";
-      for(auto i : t.shape_){
-              std::cout << i << " ";
-      }
-      std::cout << "\n";
-      */
     this->size_ = t.size_;
     this->ndim_ = t.ndim_;
     this->shape_ = std::move(t.shape_);
     this->data_ = t.data_;
+    this->scale_ = t.scale_;
+    this->zero_point_ = t.zero_point_;
     t.data_ = nullptr;
     cap_ = py::capsule(data_, [](void* f) {
       // std::cerr << "move tensor init release data_\n";
@@ -68,17 +64,8 @@ class Tensor {
       // std::cerr << "release data_\n";
       delete[] static_cast<T*>(f);
     });
-    // std::cout << "numpy ctor\n";
-    /*
-      std::cout << "numpy ctor";
-      for(auto i : shape_){
-              std::cout << i << " ";
-      }
-      std::cout << "\n";
-      */
   }
   Tensor(ssize_t size) {
-    // std::cout << "size ctop\n";
     shape_ = std::vector<ssize_t>{size};
     size_ = size;
     ndim_ = 1;
@@ -89,37 +76,19 @@ class Tensor {
     });
   }
   Tensor(std::vector<ssize_t> shape) {
-    // std::cout << "shape ctop\n";
-    /*
-    std::cout << "shape ctor";
-    for(auto i : shape){
-            std::cout << i << " ";
-    }
-    std::cout << "\n";
-    */
     shape_ = shape;
     size_ = 1;
     for_each(shape_.begin(), shape_.end(),
              [this](ssize_t n) { this->size_ *= n; });
     ndim_ = shape_.size();
     data_ = new T[size_];
-    // std::cerr << data_ << "addr\n";
     cap_ = py::capsule(data_, [](void* f) {
       // std::cerr << f << " release addr\n";
       // std::cerr << "shape init release data_\n";
       delete[] static_cast<T*>(f);
     });
   }
-  ~Tensor() {
-    // std::cout << "tensor bye c++\n";
-    /*
-        std::cout << "bye c++";
-      for(auto i : shape_){
-              std::cout << i << " ";
-      }
-      std::cout << "\n";
-      */
-  }
+  ~Tensor() {}
   T& operator()(ssize_t m, ssize_t n) {
     auto [i, j] = std::make_tuple(shape_[0], shape_[1]);
     return *(data_ + m * j + n);
@@ -169,7 +138,9 @@ class Tensor {
   const bool is_quantized() const { return is_quantized_; }
   const int quantize_type() const { return quantize_type_; }
   const float scale() const { return scale_; }
-  const float zero_point() const { return zero_point_; }
+  float& scale() { return scale_; }
+  const u8_t zero_point() const { return zero_point_; }
+  u8_t& zero_point() { return zero_point_; }
   const std::vector<ssize_t>& shape() const { return shape_; };
   const ssize_t size() const { return size_; }
   T* data() { return data_; }

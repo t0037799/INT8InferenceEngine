@@ -1,0 +1,19 @@
+#pragma once
+
+template <typename T>
+void print(T arg) {
+  std::cerr << arg << "\n";
+}
+template <>
+void print<char>(char arg) {
+  std::cerr << (int)arg << "\n";
+}
+template <>
+void print<unsigned char>(unsigned char arg) {
+  std::cerr << (int)arg << "\n";
+}
+template <typename T, typename... ARGS>
+void print(T arg, ARGS... args) {
+  std::cerr << arg << " ";
+  print(args...);
+}

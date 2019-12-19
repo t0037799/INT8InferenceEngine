@@ -4,6 +4,7 @@
 #include "layer.h"
 #include "pybind11/numpy.h"
 #include "pybind11/stl.h"
+#include "quant_utils.h"
 #include "tensor.h"
 
 namespace py = pybind11;
@@ -34,8 +35,15 @@ PYBIND11_MODULE(tensor_core, mod) {
   mod.def("relu", [](Tensor<float>& in) -> Tensor<float>&& {
     return std::move(relu(std::move(in)));
   });
+  mod.def("quantize",
+          [](Tensor<float>& in, float scale, u8_t zp) -> Tensor<u8_t>&& {
+            return std::move(quantt(in, scale, zp));
+          });
+  mod.def("dequantize", [](Tensor<u8_t>& in) -> Tensor<float>&& {
+    return std::move(dequantt(in));
+  });
   declare_tensor<float>(mod);
-  declare_tensor<int>(mod);
+  declare_tensor<u8_t>(mod);
   py::class_<Linear>(mod, "Linear")
       .def(py::init<py::array_t<float>, py::array_t<float>>())
       .def(py::init<ssize_t, ssize_t>())
@@ -45,7 +53,11 @@ PYBIND11_MODULE(tensor_core, mod) {
            [](Linear& layer, py::array_t<float> b) { layer.load_bias(b); })
       .def("prepare", [](Linear& layer) { layer.prepare(); })
       .def("convert", [](Linear& layer) { layer.convert(); })
-      .def("__call__", [](Linear& layer, Tensor<float>& x) -> Tensor<float>&& {
+      .def("__call__",
+           [](Linear& layer, Tensor<float>& x) -> Tensor<float>&& {
+             return std::move(layer.forward_prop(std::move(x)));
+           })
+      .def("__call__", [](Linear& layer, Tensor<u8_t>& x) -> Tensor<u8_t>&& {
         return std::move(layer.forward_prop(std::move(x)));
       });
   py::class_<Conv2d>(mod, "Conv2d")
@@ -57,7 +69,11 @@ PYBIND11_MODULE(tensor_core, mod) {
            [](Conv2d& layer, py::array_t<float> b) { layer.load_bias(b); })
       .def("prepare", [](Conv2d& layer) { layer.prepare(); })
       .def("convert", [](Conv2d& layer) { layer.convert(); })
-      .def("__call__", [](Conv2d& layer, Tensor<float>& x) -> Tensor<float>&& {
+      .def("__call__",
+           [](Conv2d& layer, Tensor<float>& x) -> Tensor<float>&& {
+             return std::move(layer.forward_prop(std::move(x)));
+           })
+      .def("__call__", [](Conv2d& layer, Tensor<u8_t>& x) -> Tensor<u8_t>&& {
         return std::move(layer.forward_prop(std::move(x)));
       });
 }

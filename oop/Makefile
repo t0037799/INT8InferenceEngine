@@ -10,7 +10,7 @@ MKLINC = ${MKLROOT}/include
 MKLLIB= ${MKLROOT}/lib
 endif
 
-tensor_core.so: pybind11.cc layer.h tensor.h
+tensor_core.so: pybind11.cc layer.h tensor.h conv2d.h calibrator.h quant_utils.h
 	g++ -o $@ $< -fPIC -shared \
 		$(CXXFLAGS)  \
 		-I$(MKLINC) `python3 -m pybind11 --includes`\
