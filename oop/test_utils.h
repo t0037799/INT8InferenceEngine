@@ -12,8 +12,16 @@ template <>
 void print<unsigned char>(unsigned char arg) {
   std::cerr << (int)arg << "\n";
 }
+template <typename T>
+void p(T arg) {
+  std::cerr << arg << " ";
+}
+template <>
+void p<unsigned char>(unsigned char arg) {
+  std::cerr << (int)arg << " ";
+}
 template <typename T, typename... ARGS>
 void print(T arg, ARGS... args) {
-  std::cerr << arg << " ";
+  p(arg);
   print(args...);
 }

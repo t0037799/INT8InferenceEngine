@@ -61,7 +61,7 @@ class Linear : ILayer {
     for (int i = 0; i < n; ++i) {  // calculate offset after mul
       float t = 0;
       for (int j = 0; j < k; ++j) {
-        t += in.zero_point() * q_weight(i, j) / q_weight.scale();
+        t += in.zero_point() * q_weight(i, j);
       }
       oc[i] = -t;
     }
@@ -70,11 +70,11 @@ class Linear : ILayer {
                        n, oc);
     for (ssize_t i = 0; i < m; ++i) {
       for (ssize_t j = 0; j < n; ++j) {
-        C[i * n + j] += q_bias.data()[j] / q_bias.scale();
+        C[i * n + j] += q_bias.data()[j] / in.scale();
       }
     }
-    down_scale(out.data(), C, out.size(), in.scale(), q_weight.scale(), scale,
-               zero_point);
+    down_scale(out.data(), C, out.size(), in.scale(), q_weight.scale(),
+               out.scale(), out.zero_point());
     delete[] C;
     delete[] oc;
     return out;
@@ -87,7 +87,7 @@ class Linear : ILayer {
     is_preparing = true;
   }
   void convert() {
-    std::tie(scale, zero_point) = cal->get_range(0.975);
+    std::tie(scale, zero_point) = cal->get_range(1);
     delete cal;
     is_preparing = false;
     quantize();
@@ -138,6 +138,8 @@ Tensor<T>& relu(Tensor<T>&& in) {
 template <>
 Tensor<u8_t>& relu<u8_t>(Tensor<u8_t>&& in) {
   Tensor<u8_t>* out = new Tensor<u8_t>(in.shape());
+  out->scale() = in.scale();
+  out->zero_point() = in.zero_point();
   for (ssize_t i = 0; i < in.size(); ++i) {
     out->data()[i] =
         (in.data()[i] > in.zero_point()) ? in.data()[i] : in.zero_point();
@@ -159,6 +161,8 @@ Tensor<T>& maxpool2d(Tensor<T>&& in, ssize_t kernel_size, ssize_t strides) {
   auto [n, c, h, w] = std::make_tuple(shape[0], shape[1], shape[2], shape[3]);
   Tensor<T>* out = new Tensor<T>(
       {n, c, (h - kernel_size) / strides + 1, (w - kernel_size) / strides + 1});
+  out->scale() = in.scale();
+  out->zero_point() = in.zero_point();
 #pragma omp parallel for
   for (int i = 0; i < n; ++i) {
     for (int j = 0; j < c; ++j) {
