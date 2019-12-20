@@ -11,33 +11,35 @@ lib
 * mkl
 
 ## Benchmark
-*Testing on mnist with only one fully connected layer*
+*Testing on cifar10 with alexnet*
 
-original accuracy: 92%
+*cpu: i9-9900k*
 
-pytorch int8 accuracy: 92.6%
+original accuracy: 77.8%
 
-my engine accuracy: 91.3%
+pytorch int8 accuracy: 77.4%
 
-|Batch size|Pytorch FP32|Pytorch INT8|Gains|My Engine INT8|Gains|
-|---|---|---|---|---|---|
-|1|561ms|576ms|0.97|617ms|0.91|
-|100|9.3ms|12.6ms|0.74|16.1ms|0.58|
-|10000|2.3ms|3.8ms|0.71|5.7ms|0.47|
+my engine int8 accuracy: 76.1%
+
+|Batch size|Pytorch FP32|Pytorch INT8|My Engine FP32|My Engine INT8|
+|---|---|---|---|---|
+|10|50.4s|28.6s|1m22s|2m9s|
+|100|37s|23.9s|57.8s|1m5s|
+|1000|37.9ms|27.4ms|55.3s|56s|
 
 
 ## Current Progress
 
-* Hard coded fully-connected layer function
+* Support all operators for AlexNet
 * Import pytorch model's parameters through numpy
-* Hard coded quantization parameters
+* Automatic quantization calibrator
 * Simple benchmark
+* Basic OOP design
 
 ## TODO
 
-* oop design for entire neural network
-* convolution layer, relu, maxpool layers
+* Refactor
+* Document
 * unit test on each kernel and layer
 * optimization of quantized kernel
-* auto calibration for quantization
-* quantized model save/load
+* Build system
