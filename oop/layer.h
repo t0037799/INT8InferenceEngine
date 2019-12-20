@@ -159,15 +159,16 @@ template <typename T>
 Tensor<T>& maxpool2d(Tensor<T>&& in, ssize_t kernel_size, ssize_t strides) {
   auto shape = in.shape();
   auto [n, c, h, w] = std::make_tuple(shape[0], shape[1], shape[2], shape[3]);
-  Tensor<T>* out = new Tensor<T>(
-      {n, c, (h - kernel_size) / strides + 1, (w - kernel_size) / strides + 1});
+  ssize_t oh = (h - kernel_size) / strides + 1;
+  ssize_t ow = (w - kernel_size) / strides + 1;
+  Tensor<T>* out = new Tensor<T>({n, c, oh, ow});
   out->scale() = in.scale();
   out->zero_point() = in.zero_point();
 #pragma omp parallel for
   for (int i = 0; i < n; ++i) {
     for (int j = 0; j < c; ++j) {
-      for (int k = 0, o = 0; k < h; k += strides, ++o) {
-        for (int l = 0, p = 0; l < w; l += strides, ++p) {
+      for (int k = 0, o = 0; o < oh; k += strides, ++o) {
+        for (int l = 0, p = 0; p < ow; l += strides, ++p) {
           T r = min<T>();
           for (int m = 0; m < kernel_size; ++m) {
             for (int n = 0; n < kernel_size; ++n) {

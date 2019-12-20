@@ -78,7 +78,10 @@ PYBIND11_MODULE(tensor_core, mod) {
       });
   py::class_<Conv2d>(mod, "Conv2d")
       .def(py::init<py::array_t<float>, py::array_t<float>>())
-      .def(py::init<ssize_t, ssize_t, ssize_t>())
+      .def(py::init<ssize_t, ssize_t, ssize_t, ssize_t, ssize_t>(),
+           py::arg("in_channels"), py::arg("out_channels"),
+           py::arg("kernel_size"), py::arg("stride") = 1,
+           py::arg("padding") = 0)
       .def("load_weight",
            [](Conv2d& layer, py::array_t<float> w) { layer.load_weight(w); })
       .def("load_bias",

@@ -14,11 +14,35 @@ void im2col_tile(T* M, const T* I, int c, int h, int w, int kh, int kw, int i,
 }
 
 template <typename T>
-void im2col(T* M, const T* I, int c, int h, int w, int kh, int kw) {
-  for (int i = 0; i < h - kh + 1; ++i) {
-    for (int j = 0; j < w - kw + 1; ++j) {
-      im2col_tile(M + (i * (w - kw + 1) + j) * c * kh * kw, I, c, h, w, kh, kw,
-                  i, j);
+void im2col_tile(T* M, const T* I, int c, int h, int w, int kh, int kw, int i,
+                 int j, int zero_point) {
+  for (int k = 0; k < c; ++k) {
+    for (int l = 0; l < kh; ++l) {
+      for (int m = 0; m < kw; ++m) {
+        const ssize_t idx = (h * w) * k + (i + l) * w + (j + m);
+        if ((i + l) < 0 || (j + m) < 0 || (i + l) >= h || (j + m) >= w) {
+          M[k * kh * kw + l * kw + m] = zero_point;
+        } else {
+          M[k * kh * kw + l * kw + m] = I[idx];
+        }
+      }
+    }
+  }
+}
+
+template <typename T>
+void im2col(T* M, const T* I, int c, int h, int w, int kh, int kw,
+            ssize_t stride, ssize_t padding, int zero_point) {
+  ssize_t oh = (h - kh + 2 * padding) / stride + 1;
+  ssize_t ow = (w - kw + 2 * padding) / stride + 1;
+  for (int i = -padding, ti = 0; ti < oh; i += stride, ++ti) {
+    for (int j = -padding, tj = 0; tj < ow; j += stride, ++tj) {
+      if (padding != 0) {
+        im2col_tile(M + (ti * ow + tj) * c * kh * kw, I, c, h, w, kh, kw, i, j,
+                    zero_point);
+      } else {
+        im2col_tile(M + (ti * ow + tj) * c * kh * kw, I, c, h, w, kh, kw, i, j);
+      }
     }
   }
 }
@@ -38,13 +62,20 @@ void transpose(T* data, ssize_t nrow, ssize_t ncol) {
 class Conv2d : ILayer {
  public:
   Conv2d() = delete;
-  Conv2d(ssize_t in_channel, ssize_t out_channel, ssize_t kernel_size)
+  Conv2d(ssize_t in_channel, ssize_t out_channel, ssize_t kernel_size,
+         ssize_t stride = 1, ssize_t padding = 0)
       : weight(
             Tensor<float>({out_channel, in_channel, kernel_size, kernel_size})),
         bias(Tensor<float>(out_channel)),
         q_weight(
             Tensor<s8_t>({out_channel, in_channel, kernel_size, kernel_size})),
-        q_bias(Tensor<s8_t>(out_channel)) {}
+        q_bias(Tensor<s8_t>(out_channel)),
+        stride(stride),
+        padding(padding) {
+    if (stride == 0) {
+      throw std::exception();
+    }
+  }
   Conv2d(Tensor<float> _w, Tensor<float> _b) : weight(_w), bias(_b) {}
   Conv2d(py::array_t<float> _w, py::array_t<float> _b)
       : weight(Tensor<float>(_w)), bias(Tensor<float>(_b)) {}
@@ -59,22 +90,23 @@ class Conv2d : ILayer {
     ssize_t kc = weight.shape()[0];
     ssize_t kh = weight.shape()[2];
     ssize_t kw = weight.shape()[3];
-    Tensor<float>* outp = new Tensor<float>({n, kc, h - kh + 1, w - kw + 1});
+    ssize_t oh = (h - kh + 2 * padding) / stride + 1;
+    ssize_t ow = (w - kw + 2 * padding) / stride + 1;
+    Tensor<float>* outp = new Tensor<float>({n, kc, oh, ow});
     Tensor<float>& out = *outp;
     ssize_t mat_m = kc;
-    ssize_t mat_n = (h - kh + 1) * (w - kw + 1);
+    ssize_t mat_n = oh * ow;
     ssize_t mat_k = c * kh * kw;
-    ssize_t matrix_sz = (h - kh + 1) * (w - kw + 1) * c * kh * kw;
 #pragma omp parallel for
     for (int i = 0; i < n; ++i) {
       float* matricize = new float[mat_k * mat_n];
-      im2col(matricize, &in(i, 0, 0, 0), c, h, w, kh, kw);
+      im2col(matricize, &in(i, 0, 0, 0), c, h, w, kh, kw, stride, padding, 0);
       float* C = const_cast<float*>(&out(i, 0, 0, 0));
       cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, mat_m, mat_n, mat_k,
                   1, weight.data(), mat_k, matricize, mat_k, 0, C, mat_n);
       for (int j = 0; j < kc; ++j) {
-        for (int k = 0; k < (h - kh + 1); ++k) {
-          for (int l = 0; l < (w - kw + 1); ++l) {
+        for (int k = 0; k < oh; ++k) {
+          for (int l = 0; l < ow; ++l) {
             out(i, j, k, l) += bias.data()[j];
           }
         }
@@ -95,16 +127,17 @@ class Conv2d : ILayer {
     ssize_t kc = weight.shape()[0];
     ssize_t kh = weight.shape()[2];
     ssize_t kw = weight.shape()[3];
-    Tensor<float>* outp = new Tensor<float>({n, kc, h - kh + 1, w - kw + 1});
+    ssize_t oh = (h - kh + 2 * padding) / stride + 1;
+    ssize_t ow = (w - kw + 2 * padding) / stride + 1;
+    Tensor<float>* outp = new Tensor<float>({n, kc, oh, ow});
     Tensor<float>& out = *outp;
-    ssize_t mat_m = (h - kh + 1) * (w - kw + 1);
+    ssize_t mat_m = oh * ow;
     ssize_t mat_n = kc;
     ssize_t mat_k = c * kh * kw;
-    ssize_t matrix_sz = (h - kh + 1) * (w - kw + 1) * c * kh * kw;
 #pragma omp parallel for
     for (int i = 0; i < n; ++i) {
       float* matricize = new float[mat_m * mat_k];
-      im2col(matricize, &in(i, 0, 0, 0), c, h, w, kh, kw);
+      im2col(matricize, &in(i, 0, 0, 0), c, h, w, kh, kw, stride, padding, 0);
       float* C = const_cast<float*>(&out(i, 0, 0, 0));
       cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, mat_m, mat_n, mat_k,
                   1, matricize, mat_k, weight.data(), mat_k, 0, C, mat_n);
@@ -131,11 +164,13 @@ class Conv2d : ILayer {
     ssize_t kc = q_weight.shape()[0];
     ssize_t kh = q_weight.shape()[2];
     ssize_t kw = q_weight.shape()[3];
-    Tensor<u8_t>* outp = new Tensor<u8_t>({n, kc, h - kh + 1, w - kw + 1});
+    ssize_t oh = (h - kh + 2 * padding) / stride + 1;
+    ssize_t ow = (w - kw + 2 * padding) / stride + 1;
+    Tensor<u8_t>* outp = new Tensor<u8_t>({n, kc, oh, ow});
     Tensor<u8_t>& out = *outp;
     out.scale() = scale;
     out.zero_point() = zero_point;
-    ssize_t mat_m = (h - kh + 1) * (w - kw + 1);
+    ssize_t mat_m = oh * ow;
     ssize_t mat_n = kc;
     ssize_t mat_k = c * kh * kw;
 #pragma omp parallel for
@@ -150,7 +185,8 @@ class Conv2d : ILayer {
         }
         oc[j] = q_bias.data()[j] / in.scale() - t;  // bias count in offset
       }
-      im2col(matricize, &in(i, 0, 0, 0), c, h, w, kh, kw);
+      im2col(matricize, &in(i, 0, 0, 0), c, h, w, kh, kw, stride, padding,
+             in.zero_point());
       cblas_gemm_s8u8s32(CblasRowMajor, CblasNoTrans, CblasTrans,
                          CblasRowOffset, mat_m, mat_n, mat_k, 1, matricize,
                          mat_k, 0, q_weight.data(), mat_k, 0, 0, C, mat_n, oc);
@@ -202,6 +238,8 @@ class Conv2d : ILayer {
   Tensor<float> bias;
   Tensor<s8_t> q_weight;
   Tensor<s8_t> q_bias;
+  ssize_t padding;
+  ssize_t stride;
   Calibrator* cal;
   bool is_preparing = false;
   bool is_quantized = false;
