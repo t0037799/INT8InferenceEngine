@@ -79,7 +79,7 @@ class Conv2d : ILayer {
           }
         }
       }
-	  delete []matricize;
+      delete[] matricize;
     }
     if (is_preparing) {
       cal->sample(out.data(), out.size());
@@ -110,8 +110,8 @@ class Conv2d : ILayer {
                   1, matricize, mat_k, weight.data(), mat_k, 0, C, mat_n);
       for (int j = 0; j < kc; ++j) {
         for (int k = 0; k < mat_m; ++k) {
-            C[k * kc +j] += bias.data()[j];
-          }
+          C[k * kc + j] += bias.data()[j];
+        }
       }
       transpose(&out(i, 0, 0, 0), mat_m, mat_n);
       delete[] matricize;
