@@ -58,6 +58,7 @@ class Linear : ILayer {
     out.zero_point() = zero_point;
     int* C = new int[m * n];
     int* oc = new int[n];
+#pragma omp parallel for
     for (int i = 0; i < n; ++i) {  // calculate offset after mul
       float t = 0;
       for (int j = 0; j < k; ++j) {
