@@ -129,6 +129,7 @@ class Linear : ILayer {
 template <typename T>
 Tensor<T>& relu(Tensor<T>&& in) {
   Tensor<T>* out = new Tensor<T>(in.shape());
+#pragma omp parallel for
   for (ssize_t i = 0; i < in.size(); ++i) {
     out->data()[i] = (in.data()[i] > 0) ? in.data()[i] : 0;
   }
@@ -140,6 +141,7 @@ Tensor<u8_t>& relu<u8_t>(Tensor<u8_t>&& in) {
   Tensor<u8_t>* out = new Tensor<u8_t>(in.shape());
   out->scale() = in.scale();
   out->zero_point() = in.zero_point();
+#pragma omp parallel for
   for (ssize_t i = 0; i < in.size(); ++i) {
     out->data()[i] =
         (in.data()[i] > in.zero_point()) ? in.data()[i] : in.zero_point();

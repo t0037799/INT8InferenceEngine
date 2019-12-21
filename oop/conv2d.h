@@ -4,9 +4,9 @@
 template <typename T>
 void im2col_tile(T* M, const T* I, int c, int h, int w, int kh, int kw, int i,
                  int j) {
-  for (int k = 0; k < c; ++k) {
+  for (int m = 0; m < kw; ++m) {
     for (int l = 0; l < kh; ++l) {
-      for (int m = 0; m < kw; ++m) {
+      for (int k = 0; k < c; ++k) {
         M[k * kh * kw + l * kw + m] = I[(h * w) * k + (i + l) * w + (j + m)];
       }
     }
@@ -16,9 +16,9 @@ void im2col_tile(T* M, const T* I, int c, int h, int w, int kh, int kw, int i,
 template <typename T>
 void im2col_tile(T* M, const T* I, int c, int h, int w, int kh, int kw, int i,
                  int j, int zero_point) {
-  for (int k = 0; k < c; ++k) {
+  for (int m = 0; m < kw; ++m) {
     for (int l = 0; l < kh; ++l) {
-      for (int m = 0; m < kw; ++m) {
+      for (int k = 0; k < c; ++k) {
         const ssize_t idx = (h * w) * k + (i + l) * w + (j + m);
         if ((i + l) < 0 || (j + m) < 0 || (i + l) >= h || (j + m) >= w) {
           M[k * kh * kw + l * kw + m] = zero_point;
@@ -173,18 +173,18 @@ class Conv2d : ILayer {
     ssize_t mat_m = oh * ow;
     ssize_t mat_n = kc;
     ssize_t mat_k = c * kh * kw;
+    int* oc = new int[mat_n];
+    for (int j = 0; j < mat_n; ++j) {  // calculate offset after mul
+      float t = 0;
+      for (int k = 0; k < mat_k; ++k) {
+        t += in.zero_point() * q_weight.data()[j * mat_k + k];
+      }
+      oc[j] = q_bias.data()[j] / in.scale() - t;  // bias count in offset
+    }
 #pragma omp parallel for
     for (int i = 0; i < n; ++i) {
       u8_t* matricize = new u8_t[mat_m * mat_k];
       int* C = new int[mat_m * mat_n];
-      int* oc = new int[mat_n];
-      for (int j = 0; j < mat_n; ++j) {  // calculate offset after mul
-        float t = 0;
-        for (int k = 0; k < mat_k; ++k) {
-          t += in.zero_point() * q_weight.data()[j * mat_k + k];
-        }
-        oc[j] = q_bias.data()[j] / in.scale() - t;  // bias count in offset
-      }
       im2col(matricize, &in(i, 0, 0, 0), c, h, w, kh, kw, stride, padding,
              in.zero_point());
       cblas_gemm_s8u8s32(CblasRowMajor, CblasNoTrans, CblasTrans,
@@ -193,10 +193,10 @@ class Conv2d : ILayer {
       down_scale(&out(i, 0, 0, 0), C, mat_m * mat_n, in.scale(),
                  q_weight.scale(), out.scale(), out.zero_point());
       transpose(&out(i, 0, 0, 0), mat_m, mat_n);
-      delete[] oc;
       delete[] C;
       delete[] matricize;
     }
+    delete[] oc;
     return out;
   }
   void load_weight(py::array_t<float> w) { weight.load_numpy(w); }
