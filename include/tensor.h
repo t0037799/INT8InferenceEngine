@@ -60,23 +60,23 @@ class Tensor {
     cap_ = py::capsule(data_, [](void* f) { delete[] static_cast<T*>(f); });
   }
   ~Tensor() {}
-  T& operator()(ssize_t m, ssize_t n) {
-    auto [i, j] = std::make_tuple(shape_[0], shape_[1]);
-    return *(data_ + m * j + n);
+  T& operator()(std::initializer_list<ssize_t> indices){
+	  ssize_t offset = 0;
+	  ssize_t i = 0;
+	  for( ssize_t idx : indices ){
+		  offset = offset * shape_[i] + idx;
+		  ++i;
+	  }
+    return *(data_ + offset);
   }
-  const T& operator()(ssize_t m, ssize_t n) const {
-    auto [i, j] = std::make_tuple(shape_[0], shape_[1]);
-    return *(data_ + m * j + n);
-  }
-  T& operator()(ssize_t m, ssize_t n, ssize_t o, ssize_t p) {
-    auto [h, i, j, k] =
-        std::make_tuple(shape_[0], shape_[1], shape_[2], shape_[3]);
-    return *(data_ + m * i * j * k + n * j * k + o * k + p);
-  }
-  const T& operator()(ssize_t m, ssize_t n, ssize_t o, ssize_t p) const {
-    auto [h, i, j, k] =
-        std::make_tuple(shape_[0], shape_[1], shape_[2], shape_[3]);
-    return *(data_ + m * i * j * k + n * j * k + o * k + p);
+  const T& operator()(std::initializer_list<ssize_t> indices) const{
+	  ssize_t offset = 0;
+	  ssize_t i = 0;
+	  for( ssize_t idx : indices ){
+		  offset = offset * shape_[i] + idx;
+		  ++i;
+	  }
+    return *(data_ + offset);
   }
   void load_numpy(py::array_t<float> ndarray) {
     auto info = ndarray.request();

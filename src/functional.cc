@@ -52,11 +52,11 @@ Tensor<T>& max_pool2d(Tensor<T>&& in, ssize_t kernel_size, ssize_t strides) {
           for (ssize_t m = 0; m < kernel_size; ++m) {
             for (ssize_t n = 0; n < kernel_size; ++n) {
               max = [](T a, T b) { return (a >= b) ? a : b; }(
-                        max, in(i, j, k + m, l + n));
+                        max, in({i, j, k + m, l + n}));
               // r = std::max(r, in(i, j, k + m, l + n)); it's slower
             }
           }
-          out(i, j, o, p) = max;
+          out({i, j, o, p}) = max;
         }
       }
     }

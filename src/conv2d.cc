@@ -78,14 +78,14 @@ Tensor<float>& Conv2d::forward_prop(Tensor<float>&& in) {
 #pragma omp parallel for
   for (int i = 0; i < n; ++i) {
     float* matricize = new float[mat_k * mat_n];
-    im2col(matricize, &in(i, 0, 0, 0), c, h, w, kh, kw, stride_, padding_, 0);
-    float* C = const_cast<float*>(&out(i, 0, 0, 0));
+    im2col(matricize, &in({i, 0, 0, 0}), c, h, w, kh, kw, stride_, padding_, 0);
+    float* C = const_cast<float*>(&out({i, 0, 0, 0}));
     cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, mat_m, mat_n, mat_k, 1,
                 weight_->data(), mat_k, matricize, mat_k, 0, C, mat_n);
     for (int j = 0; j < kc; ++j) {
       for (int k = 0; k < oh; ++k) {
         for (int l = 0; l < ow; ++l) {
-          out(i, j, k, l) += bias_->data()[j];
+          out({i, j, k, l}) += bias_->data()[j];
         }
       }
     }
@@ -126,14 +126,14 @@ Tensor<u8_t>& Conv2d::forward_prop(Tensor<u8_t>&& in) {
   for (int i = 0; i < n; ++i) {
     u8_t* matricize = new u8_t[mat_m * mat_k];
     int* C = new int[mat_m * mat_n];
-    im2col(matricize, &in(i, 0, 0, 0), c, h, w, kh, kw, stride_, padding_,
+    im2col(matricize, &in({i, 0, 0, 0}), c, h, w, kh, kw, stride_, padding_,
            in.zero_point());
     cblas_gemm_s8u8s32(CblasRowMajor, CblasNoTrans, CblasTrans, CblasRowOffset,
                        mat_m, mat_n, mat_k, 1, matricize, mat_k, 0,
                        q_weight_->data(), mat_k, 0, 0, C, mat_n, oc);
-    down_scale(&out(i, 0, 0, 0), C, mat_m * mat_n, in.scale(),
+    down_scale(&out({i, 0, 0, 0}), C, mat_m * mat_n, in.scale(),
                q_weight_->scale(), out.scale(), out.zero_point());
-    transpose(&out(i, 0, 0, 0), mat_m, mat_n);
+    transpose(&out({i, 0, 0, 0}), mat_m, mat_n);
     delete[] C;
     delete[] matricize;
   }

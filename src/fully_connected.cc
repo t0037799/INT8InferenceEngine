@@ -11,7 +11,7 @@ Tensor<float>& Linear::forward_prop(Tensor<float>&& in) {
               weight_->data(), k, 0, out.data(), n);
   for (ssize_t i = 0; i < m; ++i) {
     for (ssize_t j = 0; j < n; ++j) {
-      out(i, j) += bias_->data()[j];
+      out({i, j}) += bias_->data()[j];
     }
   }
   if (is_preparing_) {
@@ -32,7 +32,7 @@ Tensor<u8_t>& Linear::forward_prop(Tensor<u8_t>&& in) {
   for (int i = 0; i < n; ++i) {  // calculate offset after mul
     float t = 0;
     for (int j = 0; j < k; ++j) {
-      t += in.zero_point() * (*q_weight_)(i, j);
+      t += in.zero_point() * (*q_weight_)({i, j});
     }
     oc[i] = -t;
   }
