@@ -38,8 +38,5 @@ my engine int8 accuracy: 76.1%
 
 ## TODO
 
-* Refactor
 * Document
 * unit test on each kernel and layer
-* optimization of quantized kernel
-* Build system
