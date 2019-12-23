@@ -13,6 +13,8 @@ void declare_tensor(py::module& mod) {
       .def(py::init<>())
       .def("numpy",
            [](Tensor<T>& t) { return py::array(t.shape(), t.data(), t.cap()); })
+      .def("zero_point", [](Tensor<T>& t) { return t.zero_point(); })
+      .def("scale", [](Tensor<T>& t) { return t.scale(); })
       .def("sum",
            [](Tensor<T>& t) {
              float s = 0;
@@ -32,7 +34,7 @@ void declare_tensor_funcs(py::module&);
 void declare_linear(py::module&);
 void declare_conv2d(py::module&);
 
-PYBIND11_MODULE(i8ie, mod) {
+PYBIND11_MODULE(_CXX_i8ie, mod) {
   mod.def("tensor", [](py::array_t<float> ndarray) {
     return std::unique_ptr<Tensor<float>>(new Tensor<float>(ndarray));
   });

@@ -34,7 +34,7 @@ class Tensor {
         scale_(t.scale_),
         zero_point_(t.zero_point_) {
     data_ = t.data_;
-    cap_ = t.cap_;
+    cap_ = std::move(t.cap_);
     t.data_ = nullptr;
   }
   Tensor(py::array_t<float> ndarray) {
@@ -60,22 +60,22 @@ class Tensor {
     cap_ = py::capsule(data_, [](void* f) { delete[] static_cast<T*>(f); });
   }
   ~Tensor() {}
-  T& operator()(std::initializer_list<ssize_t> indices){
-	  ssize_t offset = 0;
-	  ssize_t i = 0;
-	  for( ssize_t idx : indices ){
-		  offset = offset * shape_[i] + idx;
-		  ++i;
-	  }
+  T& operator()(std::initializer_list<ssize_t> indices) {
+    ssize_t offset = 0;
+    ssize_t i = 0;
+    for (ssize_t idx : indices) {
+      offset = offset * shape_[i] + idx;
+      ++i;
+    }
     return *(data_ + offset);
   }
-  const T& operator()(std::initializer_list<ssize_t> indices) const{
-	  ssize_t offset = 0;
-	  ssize_t i = 0;
-	  for( ssize_t idx : indices ){
-		  offset = offset * shape_[i] + idx;
-		  ++i;
-	  }
+  const T& operator()(std::initializer_list<ssize_t> indices) const {
+    ssize_t offset = 0;
+    ssize_t i = 0;
+    for (ssize_t idx : indices) {
+      offset = offset * shape_[i] + idx;
+      ++i;
+    }
     return *(data_ + offset);
   }
   void load_numpy(py::array_t<float> ndarray) {
@@ -97,7 +97,6 @@ class Tensor {
     out.size_ = size_;
     out.data_ = data_;
     out.cap_ = cap_;
-    cap_.dec_ref();
     out.is_quantized_ = is_quantized_;
     out.scale_ = scale_;
     out.zero_point_ = zero_point_;
@@ -151,6 +150,6 @@ class Tensor {
   std::vector<ssize_t> shape_;
   // quantization
   bool is_quantized_ = false;
-  float scale_;
-  u8_t zero_point_;
+  float scale_ = 1;
+  u8_t zero_point_ = 0;
 };

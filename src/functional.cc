@@ -39,7 +39,6 @@ Tensor<T>& max_pool2d(Tensor<T>&& in, ssize_t kernel_size, ssize_t strides) {
   auto [n, c, h, w] = std::make_tuple(shape[0], shape[1], shape[2], shape[3]);
   ssize_t oh = (h - kernel_size) / strides + 1;
   ssize_t ow = (w - kernel_size) / strides + 1;
-  std::cerr << n << c << oh << h << kernel_size << "he\n";
   Tensor<T>& out = *new Tensor<T>({n, c, oh, ow});
   out.scale() = in.scale();
   out.zero_point() = in.zero_point();
