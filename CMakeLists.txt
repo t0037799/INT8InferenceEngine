@@ -38,7 +38,7 @@ add_subdirectory(pybind11)
 
 pybind11_add_module(_CXX_i8ie ${SRC_FILES})
 if(MKL_RT_LIBRARY AND MKL_INCLUDE_DIR)
-  target_link_libraries(i8ie INTERFACE mkl_rt)
+  target_link_libraries(_CXX_i8ie INTERFACE ${MKL_RT_LIBRARY})
   include_directories(${MKL_INCLUDE_DIR})
 else()
   message(
