@@ -5,7 +5,8 @@ import _CXX_i8ie
 
 __all__ = [
         'tensor', 'argmax', 'relu', 'max_pool2d',
-        'Linear', 'Conv2d', 'Tensor'
+        'Linear', 'Conv2d', 'Tensor',
+        'quantize', 'dequantize'
         ]
 
 
@@ -23,3 +24,9 @@ def relu(x):
 
 def max_pool2d(x, kernel_size, stride):
     return Tensor(_CXX_i8ie.max_pool2d(x.data, kernel_size, stride))
+
+def quantize(x, scale, zero_point):
+    return Tensor(_CXX_i8ie.quantize(x.data, scale, zero_point))
+
+def dequantize(x):
+    return Tensor(_CXX_i8ie.dequantize(x.data))
